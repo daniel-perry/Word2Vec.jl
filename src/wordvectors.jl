@@ -148,7 +148,12 @@ binary (kind=`:binary`).
 """
 function wordvectors{T<:Real}(fname::AbstractString, ::Type{T}; kind::Symbol=:text)
     if kind == :binary
-        return _from_binary(fname) # only for Float32
+				result
+				try
+        	return _from_binary(fname,T)
+				catch e
+				end
+        return _from_binary2(fname,T)
     elseif kind == :text
         return _from_text(T, fname)
     else
@@ -158,16 +163,19 @@ end
 wordvectors(frame::AbstractString; kind::Symbol=:text) = wordvectors(frame, Float64, kind = kind)
 
 # generate a WordVectors object from binary file
-function _from_binary(filename::AbstractString) 
+function _from_binary{T <: Real}(filename::AbstractString, ::Type{T}) 
     open(filename) do f
         header = strip(readline(f))
         vocab_size,vector_size = map(x -> parse(Int, x), split(header, ' '))
         vocab = Array(AbstractString, vocab_size)
-        vectors = Array(Float32, vector_size, vocab_size)
-        binary_length = sizeof(Float32) * vector_size
+        #vectors = Array(Float32, vector_size, vocab_size)
+        #binary_length = sizeof(Float32) * vector_size
+        vectors = Array(T, vector_size, vocab_size)
+        binary_length = sizeof(T) * vector_size
         for i in 1:vocab_size
             vocab[i] = strip(readuntil(f, ' '))
-            vector = reinterpret(Float32, readbytes(f, binary_length))
+            #vector = reinterpret(Float32, readbytes(f, binary_length))
+            vector = reinterpret(T, readbytes(f, binary_length))
             vec_norm = norm(vector)
             vectors[:, i] = vector./vec_norm  # unit vector
             readbytes(f, 1) # new line
@@ -175,6 +183,31 @@ function _from_binary(filename::AbstractString)
         return WordVectors(vocab, vectors) 
     end
 end
+
+function _from_binary2{T <: Real}(filename::AbstractString, ::Type{T}) 
+    open(filename) do f
+				vocab_size = read(f, Int32)  # "words"
+				vector_size = read(f, Int32) # "size"
+				println("vocab size: ", vocab_size)
+				println("vector size: ", vector_size)
+        #header = strip(readline(f))
+        #vocab_size,vector_size = map(x -> parse(Int, x), split(header, ' '))
+        vocab = Array(AbstractString, vocab_size) # "vocab"
+        #vectors = Array(T, vector_size, vocab_size) # "M"
+        vectors = spzeros(T, vector_size, vocab_size) # "M"
+        binary_length = sizeof(T) * vector_size
+				println("type : ", T)
+        for i in 1:vocab_size
+            vocab[i] = strip(readuntil(f, ' '))
+            vector = reinterpret(T, readbytes(f, binary_length))
+            vec_norm = norm(vector)
+            vectors[:, i] = vector./vec_norm  # unit vector
+            readbytes(f, 1) # new line
+        end
+        return WordVectors(vocab, vectors) 
+    end
+end
+
 
 # generate a WordVectors object from text file
 function _from_text{T}(::Type{T}, filename::AbstractString)
