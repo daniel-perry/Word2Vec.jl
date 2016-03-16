@@ -186,8 +186,10 @@ end
 
 function _from_binary2{T <: Real}(filename::AbstractString, ::Type{T}) 
     open(filename) do f
-				vocab_size = read(f, Int32)  # "words"
-				vector_size = read(f, Int32) # "size"
+        header = strip(readline(f))
+        vocab_size,vector_size = map(x -> parse(Int, x), split(header, ' '))
+				#vocab_size = read(f, Int64)  # "words"
+				#vector_size = read(f, Int64) # "size"
 				println("vocab size: ", vocab_size)
 				println("vector size: ", vector_size)
         #header = strip(readline(f))
@@ -198,11 +200,17 @@ function _from_binary2{T <: Real}(filename::AbstractString, ::Type{T})
         binary_length = sizeof(T) * vector_size
 				println("type : ", T)
         for i in 1:vocab_size
-            vocab[i] = strip(readuntil(f, ' '))
-            vector = reinterpret(T, readbytes(f, binary_length))
-            vec_norm = norm(vector)
-            vectors[:, i] = vector./vec_norm  # unit vector
-            readbytes(f, 1) # new line
+						try
+							vocab[i] = strip(readuntil(f, ' '))
+							vector = reinterpret(T, readbytes(f, binary_length))
+							vec_norm = norm(vector)
+							vectors[:, i] = vector./vec_norm  # unit vector
+							readbytes(f, 1) # new line
+						catch
+							vectors[:, i] = 0
+							readbytes(f, binary_length)
+							readuntil(f, '\n')
+						end
         end
         return WordVectors(vocab, vectors) 
     end
